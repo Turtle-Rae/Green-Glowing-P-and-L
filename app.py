@@ -73,7 +73,8 @@ def main():
                 default=market_hour_categories
             )
             
-            # Percent Gain/Loss Filter
+            # Percent Gain/Loss Filter - Use Percent_Gain_Loss for compatibility
+            # We'll keep using the original name in filters to ensure backward compatibility
             min_gain_loss = full_trade_analysis_df['Percent_Gain_Loss'].min()
             max_gain_loss = full_trade_analysis_df['Percent_Gain_Loss'].max()
             
