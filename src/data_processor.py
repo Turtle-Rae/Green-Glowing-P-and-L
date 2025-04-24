@@ -324,16 +324,20 @@ def prepare_trade_analysis(df):
                     # Calculate trade performance
                     total_cost = buy_qty * buy_price
                     total_revenue = total_sell_revenue
-                    profit_loss = total_revenue - total_cost
+                    total_profit_loss = total_revenue - total_cost
+                    
+                    # PnL per share calculation
+                    avg_sell_price = total_sell_revenue / total_sell_qty if total_sell_qty > 0 else 0
+                    pnl_per_share = avg_sell_price - buy_price
                     
                     # Calculate percent gain/loss safely
                     try:
-                        percent_gain_loss = (profit_loss / total_cost) * 100 if total_cost != 0 else 0
+                        percent_gain_loss = (total_profit_loss / total_cost) * 100 if total_cost != 0 else 0
                     except Exception:
                         percent_gain_loss = 0
                     
                     # Determine trade outcome
-                    trade_outcome = 'Win' if profit_loss > 0 else 'Loss' if profit_loss < 0 else 'Break Even'
+                    trade_outcome = 'Win' if total_profit_loss > 0 else 'Loss' if total_profit_loss < 0 else 'Break Even'
                     
                     # Construct trade entry
                     trade_entry = {
@@ -341,11 +345,12 @@ def prepare_trade_analysis(df):
                         'Buy_Quantity': buy_qty,
                         'Sell_Quantity': total_sell_qty,
                         'Avg_Buy_Price': buy_price,
-                        'Avg_Sell_Price': total_sell_revenue / total_sell_qty if total_sell_qty > 0 else 0,
+                        'Avg_Sell_Price': avg_sell_price,
+                        'PnL_Per_Share': pnl_per_share,
                         'Total_Cost': total_cost,
                         'Total_Revenue': total_revenue,
-                        'Profit_Loss': profit_loss,
-                        'Percent_Gain_Loss': percent_gain_loss,
+                        'Total_Profit_Loss': total_profit_loss,
+                        'Percent_Gain_Loss': percent_gain_loss,  # Keep old name for backward compatibility
                         'Trade_Outcome': trade_outcome,
                         'Price_Range': buy_row['Price_Range'],
                         'Market_Hour_Category': buy_row['Market_Hour_Category'],
@@ -358,7 +363,14 @@ def prepare_trade_analysis(df):
                     
                     trade_analysis.append(trade_entry)
     
-    return pd.DataFrame(trade_analysis)
+    # Create dataframe from trade analysis list
+    result_df = pd.DataFrame(trade_analysis)
+    
+    # Add PnL_% column as a copy of Percent_Gain_Loss
+    if not result_df.empty:
+        result_df['PnL_%'] = result_df['Percent_Gain_Loss']
+    
+    return result_df
 
 def prepare_trade_analysis_from_rachel(df):
     """
@@ -390,17 +402,20 @@ def prepare_trade_analysis_from_rachel(df):
         date = buy_row['Date']
         
         # Get P&L data
-        profit_loss = buy_row['Gain/Loss']
+        total_profit_loss = buy_row['Gain/Loss']
         percent_gain_loss = buy_row['% Gain/Loss']
         
         # Calculate Total Cost
         total_cost = buy_qty * buy_price
         
         # Calculate Total Revenue
-        total_revenue = total_cost + profit_loss
+        total_revenue = total_cost + total_profit_loss
         
         # Calculate Avg Sell Price
         avg_sell_price = total_revenue / buy_qty if buy_qty > 0 else 0
+        
+        # Calculate PnL per share
+        pnl_per_share = avg_sell_price - buy_price
         
         # Determine trade outcome
         if 'Profit or Loss' in buy_row:
@@ -408,7 +423,7 @@ def prepare_trade_analysis_from_rachel(df):
             trade_outcome = 'Win' if buy_row['Profit or Loss'] == 'Profit' else 'Loss'
         else:
             # Otherwise calculate it from the P&L
-            trade_outcome = 'Win' if profit_loss > 0 else 'Loss' if profit_loss < 0 else 'Break Even'
+            trade_outcome = 'Win' if total_profit_loss > 0 else 'Loss' if total_profit_loss < 0 else 'Break Even'
         
         # Construct trade entry
         trade_entry = {
@@ -417,10 +432,11 @@ def prepare_trade_analysis_from_rachel(df):
             'Sell_Quantity': buy_qty,  # Assume all bought shares were sold
             'Avg_Buy_Price': buy_price,
             'Avg_Sell_Price': avg_sell_price,
+            'PnL_Per_Share': pnl_per_share,
             'Total_Cost': total_cost,
             'Total_Revenue': total_revenue,
-            'Profit_Loss': profit_loss,
-            'Percent_Gain_Loss': percent_gain_loss,
+            'Total_Profit_Loss': total_profit_loss,
+            'Percent_Gain_Loss': percent_gain_loss,  # Keep old name for backward compatibility
             'Trade_Outcome': trade_outcome,
             'Price_Range': buy_row['Price_Range'],
             'Market_Hour_Category': buy_row['Market_Hour_Category'],
@@ -433,4 +449,11 @@ def prepare_trade_analysis_from_rachel(df):
         
         trade_analysis.append(trade_entry)
     
-    return pd.DataFrame(trade_analysis)
+    # Create dataframe from trade analysis list
+    result_df = pd.DataFrame(trade_analysis)
+    
+    # Add PnL_% column as a copy of Percent_Gain_Loss
+    if not result_df.empty:
+        result_df['PnL_%'] = result_df['Percent_Gain_Loss']
+    
+    return result_df

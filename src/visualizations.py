@@ -28,24 +28,65 @@ def create_performance_overview(trade_analysis_df, performance_metrics):
         'titlefont': {'size': 16, 'color': '#333'},
     }
     
-    # Create columns for metrics with a softer look
-    col1, col2, col3, col4 = st.columns(4)
+    # Create columns for basic metrics with a softer look - MODIFIED ORDER
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
-        st.metric(label="Total Trades", value=performance_metrics['Total_Trades'])
-    
-    with col2:
         st.metric(label="Trading Days", value=performance_metrics['Trading_Days'])
     
+    with col2:
+        st.metric(label="Total Trades", value=performance_metrics['Total_Trades'])
+    
     with col3:
-        st.metric(label="Wins", 
-                  value=performance_metrics['Total_Wins'], 
-                  delta=f"{performance_metrics['Win_Rate']:.1f}%")
+        st.metric(label="Wins", value=performance_metrics['Total_Wins'])
     
     with col4:
-        st.metric(label="Losses", 
-                  value=performance_metrics['Total_Losses'], 
-                  delta=f"{performance_metrics['Loss_Rate']:.1f}%")
+        st.metric(label="Losses", value=performance_metrics['Total_Losses'])
+    
+    with col5:
+        st.metric(label="Win Rate", value=f"{performance_metrics['Win_Rate']:.1f}%")
+    
+    # Add Risk-Reward metrics section
+    st.subheader("Risk-Reward Analysis")
+    
+    # Create columns for Risk-Reward metrics - MODIFIED TO 5 COLUMNS PER ROW
+    rr_col1, rr_col2, rr_col3, rr_col4, rr_col5 = st.columns(5)
+    
+    with rr_col1:
+        st.metric(
+            label="Reward %",
+            value=f"{performance_metrics['Reward_%']:.2f}%",
+            help="Average percentage gain on winning trades"
+        )
+    
+    with rr_col2:
+        st.metric(
+            label="Risk %",
+            value=f"{performance_metrics['Risk_%']:.2f}%",
+            help="Average percentage loss on losing trades (absolute value)"
+        )
+    
+    with rr_col3:
+        st.metric(
+            label="Reward $",
+            value=f"${performance_metrics['Reward_$']:.2f}",
+            help="Average $ gain per share on winning trades"
+        )
+    
+    with rr_col4:
+        st.metric(
+            label="Risk $",
+            value=f"${performance_metrics['Risk_$']:.2f}",
+            help="Average $ loss per share on losing trades (absolute value)"
+        )
+    
+    # Risk-Reward Ratio
+    with rr_col5:
+        st.metric(
+            label="Risk-Reward Ratio",
+            value=f"1:{performance_metrics['Risk_Reward_Ratio']:.2f}",
+            help="Ratio of reward % to risk % (higher is better)"
+        )
     
     # Create two columns for charts
     col1, col2 = st.columns(2)
@@ -218,27 +259,31 @@ def create_detailed_trade_table(trade_analysis_df):
     Args:
         trade_analysis_df (pd.DataFrame): Trade analysis dataframe
     """
+    # Check if we have the new renamed fields
+    has_new_fields = 'PnL_%' in trade_analysis_df.columns and 'Total_Profit_Loss' in trade_analysis_df.columns
+    
     st.subheader("Detailed Trade Performance")
     
-    # Calculate P&L per Share
-    trade_analysis_df['PnL_Per_Share'] = trade_analysis_df['Avg_Sell_Price'] - trade_analysis_df['Avg_Buy_Price']
+    # Determine which field names to use for display based on availability
+    profit_loss_field = 'Total_Profit_Loss' if 'Total_Profit_Loss' in trade_analysis_df.columns else 'Profit_Loss'
+    percent_gain_loss_field = 'PnL_%' if 'PnL_%' in trade_analysis_df.columns else 'Percent_Gain_Loss'
     
-    # Store original numeric values for styling
-    numeric_pnl_per_share = trade_analysis_df['PnL_Per_Share'].copy()
-    numeric_profit_loss = trade_analysis_df['Profit_Loss'].copy()
-    numeric_percent_gain_loss = trade_analysis_df['Percent_Gain_Loss'].copy()
-    
-    # Columns to display
+    # Columns to display - PnL_Per_Share and percent gain/loss are next to each other now
     display_columns = [
         'Symbol', 'Buy_Quantity', 'Avg_Buy_Price', 'Avg_Sell_Price', 
-        'PnL_Per_Share',  # Add new column
-        'Total_Cost', 'Total_Revenue', 'Profit_Loss', 
-        'Percent_Gain_Loss', 'Trade_Outcome', 'Price_Range', 
+        'PnL_Per_Share', percent_gain_loss_field,  # Field next to PnL_Per_Share
+        'Total_Cost', 'Total_Revenue', profit_loss_field,  # Use appropriate field name
+        'Trade_Outcome', 'Price_Range', 
         'Market_Hour_Category', 'Month', 'Day_of_Week', 'DateTime'
     ]
     
     # Format the dataframe for display
     display_df = trade_analysis_df[display_columns].copy()
+    
+    # Store original numeric values for styling
+    numeric_pnl_per_share = trade_analysis_df['PnL_Per_Share'].copy()
+    numeric_profit_loss = trade_analysis_df[profit_loss_field].copy()  # Use appropriate field
+    numeric_percent_gain_loss = trade_analysis_df[percent_gain_loss_field].copy()  # Use appropriate field
     
     # Format numeric columns
     display_df['Avg_Buy_Price'] = display_df['Avg_Buy_Price'].apply(lambda x: f"${x:.2f}")
@@ -250,10 +295,10 @@ def create_detailed_trade_table(trade_analysis_df):
     display_df['PnL_Per_Share'] = display_df['PnL_Per_Share'].apply(
         lambda x: f"${x:.2f}" if x >= 0 else f"-${abs(x):.2f}"
     )
-    display_df['Profit_Loss'] = display_df['Profit_Loss'].apply(
+    display_df[profit_loss_field] = display_df[profit_loss_field].apply(
         lambda x: f"${x:.2f}" if x >= 0 else f"-${abs(x):.2f}"
     )
-    display_df['Percent_Gain_Loss'] = display_df['Percent_Gain_Loss'].apply(
+    display_df[percent_gain_loss_field] = display_df[percent_gain_loss_field].apply(
         lambda x: f"+{x:.2f}%" if x > 0 else f"{x:.2f}%"
     )
     
@@ -266,26 +311,26 @@ def create_detailed_trade_table(trade_analysis_df):
         # Create a styler with empty strings
         styler = pd.DataFrame('', index=df.index, columns=df.columns)
         
-        # Apply color to P&L per Share column based on values
+        # Apply color to PnL_Per_Share column based on values
         for i, val in enumerate(numeric_pnl_per_share):
             if val > 0:
                 styler.iloc[i, df.columns.get_loc('PnL_Per_Share')] = f'color: {win_color}'
             elif val < 0:
                 styler.iloc[i, df.columns.get_loc('PnL_Per_Share')] = f'color: {loss_color}'
         
-        # Apply color to Profit_Loss column based on values
+        # Apply color to Total_Profit_Loss/Profit_Loss column based on values
         for i, val in enumerate(numeric_profit_loss):
             if val > 0:
-                styler.iloc[i, df.columns.get_loc('Profit_Loss')] = f'color: {win_color}'
+                styler.iloc[i, df.columns.get_loc(profit_loss_field)] = f'color: {win_color}'
             elif val < 0:
-                styler.iloc[i, df.columns.get_loc('Profit_Loss')] = f'color: {loss_color}'
+                styler.iloc[i, df.columns.get_loc(profit_loss_field)] = f'color: {loss_color}'
         
-        # Apply color to Percent_Gain_Loss column based on values
+        # Apply color to PnL_%/Percent_Gain_Loss column based on values
         for i, val in enumerate(numeric_percent_gain_loss):
             if val > 0:
-                styler.iloc[i, df.columns.get_loc('Percent_Gain_Loss')] = f'color: {win_color}'
+                styler.iloc[i, df.columns.get_loc(percent_gain_loss_field)] = f'color: {win_color}'
             elif val < 0:
-                styler.iloc[i, df.columns.get_loc('Percent_Gain_Loss')] = f'color: {loss_color}'
+                styler.iloc[i, df.columns.get_loc(percent_gain_loss_field)] = f'color: {loss_color}'
         
         return styler
     

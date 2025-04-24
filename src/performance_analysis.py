@@ -11,6 +11,7 @@ def calculate_overall_performance(trade_analysis_df):
     Returns:
         dict: Performance metrics
     """
+    # Basic performance metrics
     performance_metrics = {
         'Total_Trades': len(trade_analysis_df),
         'Distinct_Tickers': trade_analysis_df['Symbol'].nunique(),
@@ -19,9 +20,39 @@ def calculate_overall_performance(trade_analysis_df):
         'Total_Break_Even': (trade_analysis_df['Trade_Outcome'] == 'Break Even').sum(),
         'Win_Rate': (trade_analysis_df['Trade_Outcome'] == 'Win').mean() * 100,
         'Loss_Rate': (trade_analysis_df['Trade_Outcome'] == 'Loss').mean() * 100,
-        'Average_Percent_Gain_Loss': trade_analysis_df['Percent_Gain_Loss'].mean(),
+        'Average_Percent_Gain_Loss': trade_analysis_df['Percent_Gain_Loss'].mean(),  # Keep the original metric
         'Trading_Days': trade_analysis_df['Date'].nunique()
     }
+    
+    # Add PnL_% average too for use in UI
+    if 'PnL_%' in trade_analysis_df.columns:
+        performance_metrics['Average_PnL_Percent'] = trade_analysis_df['PnL_%'].mean()
+    
+    # Filter for wins and losses
+    win_trades = trade_analysis_df[trade_analysis_df['Trade_Outcome'] == 'Win']
+    loss_trades = trade_analysis_df[trade_analysis_df['Trade_Outcome'] == 'Loss']
+    
+    # Calculate new risk-reward metrics
+    if not win_trades.empty:
+        performance_metrics['Reward_%'] = win_trades['Percent_Gain_Loss'].mean()
+        performance_metrics['Reward_$'] = win_trades['PnL_Per_Share'].mean()
+    else:
+        performance_metrics['Reward_%'] = 0
+        performance_metrics['Reward_$'] = 0
+    
+    if not loss_trades.empty:
+        # Use absolute values for risk metrics for easier comparison
+        performance_metrics['Risk_%'] = abs(loss_trades['Percent_Gain_Loss'].mean())
+        performance_metrics['Risk_$'] = abs(loss_trades['PnL_Per_Share'].mean())
+    else:
+        performance_metrics['Risk_%'] = 0
+        performance_metrics['Risk_$'] = 0
+    
+    # Calculate risk-reward ratio
+    if performance_metrics['Risk_%'] > 0:
+        performance_metrics['Risk_Reward_Ratio'] = performance_metrics['Reward_%'] / performance_metrics['Risk_%']
+    else:
+        performance_metrics['Risk_Reward_Ratio'] = 0
     
     return performance_metrics
 
@@ -36,14 +67,17 @@ def performance_by_dimension(trade_analysis_df, dimension):
     Returns:
         pd.DataFrame: Performance breakdown by dimension
     """
+    # Determine which profit/loss field to use
+    profit_loss_field = 'Total_Profit_Loss' if 'Total_Profit_Loss' in trade_analysis_df.columns else 'Profit_Loss'
+    
     performance_breakdown = trade_analysis_df.groupby(dimension).agg({
         'Symbol': 'count',  # Number of trades
-        'Profit_Loss': 'sum',  # Total profit/loss
+        profit_loss_field: 'sum',  # Total profit/loss
         'Percent_Gain_Loss': 'mean',  # Average percent gain/loss
         'Trade_Outcome': lambda x: (x == 'Win').mean() * 100  # Win rate
     }).rename(columns={
         'Symbol': 'Number_of_Trades',
-        'Profit_Loss': 'Total_Profit_Loss',
+        profit_loss_field: 'Total_Profit_Loss',
         'Percent_Gain_Loss': 'Average_Percent_Gain_Loss',
         'Trade_Outcome': 'Win_Rate_Percent'
     }).reset_index()
@@ -60,6 +94,9 @@ def detailed_trade_statistics(trade_analysis_df):
     Returns:
         dict: Detailed trade statistics
     """
+    # Determine which profit/loss field to use
+    profit_loss_field = 'Total_Profit_Loss' if 'Total_Profit_Loss' in trade_analysis_df.columns else 'Profit_Loss'
+    
     # Descriptive statistics
     trade_stats = {
         'Trade_Quantity': {
@@ -74,8 +111,8 @@ def detailed_trade_statistics(trade_analysis_df):
             'Median_Sell_Price': trade_analysis_df['Avg_Sell_Price'].median()
         },
         'Profit_Stats': {
-            'Max_Profit_Trade': trade_analysis_df['Profit_Loss'].max(),
-            'Max_Loss_Trade': trade_analysis_df['Profit_Loss'].min(),
+            'Max_Profit_Trade': trade_analysis_df[profit_loss_field].max(),
+            'Max_Loss_Trade': trade_analysis_df[profit_loss_field].min(),
             'Largest_Percent_Gain': trade_analysis_df['Percent_Gain_Loss'].max(),
             'Largest_Percent_Loss': trade_analysis_df['Percent_Gain_Loss'].min()
         }

@@ -14,6 +14,10 @@ def create_calendar_view(trade_analysis_df):
     """
     st.subheader("📅 Calendar View")
     
+    # Determine which field names to use for calculations based on availability
+    profit_loss_field = 'Total_Profit_Loss' if 'Total_Profit_Loss' in trade_analysis_df.columns else 'Profit_Loss'
+    percent_gain_loss_field = 'PnL_%' if 'PnL_%' in trade_analysis_df.columns else 'Percent_Gain_Loss'
+    
     # Get unique months and years in the data
     trade_analysis_df['Year_Month'] = trade_analysis_df['DateTime'].dt.strftime('%Y-%m')
     unique_year_months = sorted(trade_analysis_df['Year_Month'].unique())
@@ -33,9 +37,30 @@ def create_calendar_view(trade_analysis_df):
     ]
     
     # Calculate monthly total
-    monthly_profit_loss = month_data['Profit_Loss'].sum()
+    monthly_profit_loss = month_data[profit_loss_field].sum()
     monthly_trades = len(month_data)
     monthly_win_rate = (month_data['Trade_Outcome'] == 'Win').mean() * 100 if monthly_trades > 0 else 0
+    
+    # Calculate monthly risk-reward metrics
+    monthly_win_trades = month_data[month_data['Trade_Outcome'] == 'Win']
+    monthly_loss_trades = month_data[month_data['Trade_Outcome'] == 'Loss']
+    
+    if not monthly_win_trades.empty:
+        monthly_reward_percent = monthly_win_trades[percent_gain_loss_field].mean()
+        monthly_reward_per_share = monthly_win_trades['PnL_Per_Share'].mean()
+    else:
+        monthly_reward_percent = 0
+        monthly_reward_per_share = 0
+        
+    if not monthly_loss_trades.empty:
+        monthly_risk_percent = abs(monthly_loss_trades[percent_gain_loss_field].mean())
+        monthly_risk_per_share = abs(monthly_loss_trades['PnL_Per_Share'].mean())
+    else:
+        monthly_risk_percent = 0
+        monthly_risk_per_share = 0
+    
+    # Calculate risk-reward ratio
+    monthly_rr_ratio = monthly_reward_percent / monthly_risk_percent if monthly_risk_percent > 0 else 0
     
     # Display monthly summary
     st.markdown(f"### {calendar.month_name[month]} {year}")
@@ -44,6 +69,31 @@ def create_calendar_view(trade_analysis_df):
     monthly_pl_formatted = f"+${monthly_profit_loss:.2f}" if monthly_profit_loss >= 0 else f"-${abs(monthly_profit_loss):.2f}"
     
     st.markdown(f"<h4 style='color:{monthly_pl_color};'>Monthly P&L: {monthly_pl_formatted}</h4>", unsafe_allow_html=True)
+    
+    # Display monthly risk-reward metrics
+    monthly_metrics_col1, monthly_metrics_col2, monthly_metrics_col3 = st.columns(3)
+    
+    with monthly_metrics_col1:
+        st.metric("Monthly Win Rate", f"{monthly_win_rate:.1f}%")
+    
+    with monthly_metrics_col2:
+        st.metric("Reward:Risk Ratio", f"1:{monthly_rr_ratio:.2f}" if monthly_rr_ratio > 0 else "N/A")
+    
+    with monthly_metrics_col3:
+        # Format as a table for reward/risk metrics
+        metrics_html = f"""
+        <div style="border:1px solid #ddd; border-radius:5px; padding:10px;">
+            <div style="display:flex; justify-content:space-between;">
+                <div><strong>Reward %:</strong> {monthly_reward_percent:.2f}%</div>
+                <div><strong>Risk %:</strong> {monthly_risk_percent:.2f}%</div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:5px;">
+                <div><strong>Reward $:</strong> ${monthly_reward_per_share:.2f}</div>
+                <div><strong>Risk $:</strong> ${monthly_risk_per_share:.2f}</div>
+            </div>
+        </div>
+        """
+        st.markdown(metrics_html, unsafe_allow_html=True)
     
     # Create dictionary for daily data
     days_in_month = calendar.monthrange(year, month)[1]
@@ -58,16 +108,25 @@ def create_calendar_view(trade_analysis_df):
         
         # Calculate metrics
         num_trades = len(day_df)
-        profit_loss = day_df['Profit_Loss'].sum() if num_trades > 0 else 0
+        profit_loss = day_df[profit_loss_field].sum() if num_trades > 0 else 0
         win_rate = (day_df['Trade_Outcome'] == 'Win').mean() * 100 if num_trades > 0 else 0
-        avg_gain = day_df['Percent_Gain_Loss'].mean() if num_trades > 0 else 0
+        
+        # Calculate daily risk-reward metrics
+        win_trades = day_df[day_df['Trade_Outcome'] == 'Win']
+        loss_trades = day_df[day_df['Trade_Outcome'] == 'Loss']
+        
+        reward_percent = win_trades[percent_gain_loss_field].mean() if not win_trades.empty else 0
+        risk_percent = abs(loss_trades[percent_gain_loss_field].mean()) if not loss_trades.empty else 0
+        
+        # Risk-reward ratio
+        rr_ratio = reward_percent / risk_percent if risk_percent > 0 else 0
         
         day_data[day] = {
             'date': date_obj,
             'num_trades': num_trades,
             'profit_loss': profit_loss,
             'win_rate': win_rate,
-            'avg_gain': avg_gain,
+            'rr_ratio': rr_ratio,  # Use R:R instead of avg_gain
             'weekday': date_obj.strftime('%A')
         }
     
@@ -111,7 +170,7 @@ def create_calendar_view(trade_analysis_df):
                 num_trades = data['num_trades']
                 profit_loss = data['profit_loss']
                 win_rate = data['win_rate']
-                avg_gain = data['avg_gain']
+                rr_ratio = data['rr_ratio']  # Use R:R instead of avg_gain
                 
                 # Add to weekly totals
                 week_trades += num_trades
@@ -128,9 +187,9 @@ def create_calendar_view(trade_analysis_df):
                     pl_text = f"-${abs(profit_loss):.2f}"
                     pl_color = "red"
                 
-                # Format win rate and avg gain
+                # Format win rate and R:R
                 win_rate_text = f"{win_rate:.1f}%" if num_trades > 0 else "N/A"
-                avg_gain_text = f"{avg_gain:.2f}%" if num_trades > 0 else "N/A"
+                rr_ratio_text = f"1:{rr_ratio:.2f}" if rr_ratio > 0 and num_trades > 0 else "N/A"
                 
                 # Create cell content with all metrics
                 cell_content = f"""
@@ -139,7 +198,7 @@ def create_calendar_view(trade_analysis_df):
                     <div style='color: {pl_color}; font-weight: bold;'>{pl_text}</div>
                     <div style='font-size: 0.8em;'>{num_trades} trades</div>
                     <div style='font-size: 0.8em;'>WR: {win_rate_text}</div>
-                    <div style='font-size: 0.8em;'>Avg: {avg_gain_text}</div>
+                    <div style='font-size: 0.8em;'>R:R: {rr_ratio_text}</div>
                 </div>
                 """
                 cols[weekday].markdown(cell_content, unsafe_allow_html=True)
