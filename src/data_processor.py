@@ -375,10 +375,6 @@ def prepare_trade_analysis(df):
     
     return result_df
 
-
-# This is a partial modification of the prepare_trade_analysis_enhanced function
-# to fix the issue with sell price matching
-
 def prepare_trade_analysis_enhanced(df):
     """
     Enhanced trade analysis to handle complex buy-sell patterns including partial positions
@@ -410,7 +406,7 @@ def prepare_trade_analysis_enhanced(df):
     positions = {}
     
     # Debug flag for troubleshooting specific symbols
-    debug_mode = True  # Set to True to enable debugging
+    debug_mode = False  # Set to True to enable debugging
     debug_symbols = ['FOXO']  # Add symbols to debug here
     
     # For debugging
@@ -603,6 +599,10 @@ def prepare_position_based_trade_analysis(df):
     Returns:
         pd.DataFrame: Position-based trade analysis dataframe
     """
+    # Check if input has already pre-calculated P&L data (Rachel's format)
+    if 'Gain/Loss' in df.columns and 'Profit or Loss' in df.columns:
+        return prepare_trade_analysis_from_rachel(df)
+    
     # Sort dataframe by symbol, date and time to ensure chronological processing
     df_sorted = df.sort_values(['Symbol', 'DateTime']).copy()
     
@@ -613,7 +613,7 @@ def prepare_position_based_trade_analysis(df):
     positions = {}
     
     # Debug flag for troubleshooting specific symbols
-    debug_mode = True
+    debug_mode = False
     debug_symbols = ['FOXO']
     
     # For debugging
@@ -763,8 +763,8 @@ def prepare_position_based_trade_analysis(df):
                 trade_entry = {
                     'Trade_ID': position_data['current_trade_id'],
                     'Symbol': symbol,
-                    'Total_Buy_Quantity': total_buy_qty,
-                    'Total_Sell_Quantity': total_sell_qty,
+                    'Buy_Quantity': total_buy_qty,  # Rename to match original format
+                    'Sell_Quantity': total_sell_qty,  # Rename to match original format
                     'Avg_Buy_Price': avg_buy_price,
                     'Avg_Sell_Price': avg_sell_price,
                     'PnL_Per_Share': pnl_per_share,
@@ -784,8 +784,8 @@ def prepare_position_based_trade_analysis(df):
                     'Year': position_data['trade_data']['year'],
                     'Month': position_data['trade_data']['month'],
                     'Day_of_Week': position_data['trade_data']['day_of_week'],
-                    'Start_Date': position_data['trade_data']['first_buy_date'],
-                    'End_Date': position_data['trade_data']['last_sell_date']
+                    'Date': position_data['trade_data']['first_buy_date'],  # Use first buy date
+                    'DateTime': first_buy['timestamp']  # Use first buy timestamp
                 }
                 
                 # Add additional details like buy/sell details if needed
@@ -810,15 +810,14 @@ def prepare_position_based_trade_analysis(df):
     
     # If DataFrame is empty, return an empty DataFrame with the expected columns
     if result_df.empty:
-        columns = ['Trade_ID', 'Symbol', 'Total_Buy_Quantity', 'Total_Sell_Quantity', 
+        columns = ['Trade_ID', 'Symbol', 'Buy_Quantity', 'Sell_Quantity', 
                   'Avg_Buy_Price', 'Avg_Sell_Price', 'PnL_Per_Share', 'Total_Cost', 
                   'Total_Revenue', 'Total_Profit_Loss', 'Percent_Gain_Loss', 'PnL_%', 
-                  'Trade_Outcome', 'Num_Buys', 'Num_Sells', 'First_Buy_Time', 
-                  'Last_Sell_Time', 'Trade_Duration_Minutes']
+                  'Trade_Outcome', 'Price_Range', 'Market_Hour_Category', 'Year', 
+                  'Month', 'Day_of_Week', 'Date', 'DateTime']
         return pd.DataFrame(columns=columns)
     
     return result_df
-
 
 def prepare_trade_analysis_from_rachel(df):
     """

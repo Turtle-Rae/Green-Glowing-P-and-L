@@ -14,13 +14,17 @@ def create_calendar_view(trade_analysis_df):
     """
     st.subheader("📅 Calendar View")
     
-    # Determine which field names to use for calculations based on availability
-    profit_loss_field = 'Total_Profit_Loss' if 'Total_Profit_Loss' in trade_analysis_df.columns else 'Profit_Loss'
-    percent_gain_loss_field = 'PnL_%' if 'PnL_%' in trade_analysis_df.columns else 'Percent_Gain_Loss'
+    # Create a copy of the DataFrame to avoid SettingWithCopyWarning
+    # This ensures we're working with a clean copy, not a view
+    df_copy = trade_analysis_df.copy()
     
-    # Get unique months and years in the data
-    trade_analysis_df['Year_Month'] = trade_analysis_df['DateTime'].dt.strftime('%Y-%m')
-    unique_year_months = sorted(trade_analysis_df['Year_Month'].unique())
+    # Determine which field names to use for calculations based on availability
+    profit_loss_field = 'Total_Profit_Loss' if 'Total_Profit_Loss' in df_copy.columns else 'Profit_Loss'
+    percent_gain_loss_field = 'PnL_%' if 'PnL_%' in df_copy.columns else 'Percent_Gain_Loss'
+    
+    # Get unique months and years in the data - use .loc for assignment to avoid warnings
+    df_copy.loc[:, 'Year_Month'] = df_copy['DateTime'].dt.strftime('%Y-%m')
+    unique_year_months = sorted(df_copy['Year_Month'].unique())
     
     # Create a dropdown for selecting month-year
     selected_year_month = st.selectbox(
@@ -31,9 +35,9 @@ def create_calendar_view(trade_analysis_df):
     
     # Filter data for selected month
     year, month = map(int, selected_year_month.split('-'))
-    month_data = trade_analysis_df[
-        (trade_analysis_df['DateTime'].dt.year == year) &
-        (trade_analysis_df['DateTime'].dt.month == month)
+    month_data = df_copy[
+        (df_copy['DateTime'].dt.year == year) &
+        (df_copy['DateTime'].dt.month == month)
     ]
     
     # Calculate monthly total

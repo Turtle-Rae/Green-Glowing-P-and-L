@@ -259,8 +259,8 @@ def create_detailed_trade_table(trade_analysis_df):
     Args:
         trade_analysis_df (pd.DataFrame): Trade analysis dataframe
     """
-    # Check if we have the new renamed fields
-    has_new_fields = 'PnL_%' in trade_analysis_df.columns and 'Total_Profit_Loss' in trade_analysis_df.columns
+    # Check if this is position-based analysis (it has Trade_ID and additional columns)
+    is_position_based = 'Trade_ID' in trade_analysis_df.columns and 'Buy_Details' in trade_analysis_df.columns
     
     st.subheader("Detailed Trade Performance")
     
@@ -268,22 +268,35 @@ def create_detailed_trade_table(trade_analysis_df):
     profit_loss_field = 'Total_Profit_Loss' if 'Total_Profit_Loss' in trade_analysis_df.columns else 'Profit_Loss'
     percent_gain_loss_field = 'PnL_%' if 'PnL_%' in trade_analysis_df.columns else 'Percent_Gain_Loss'
     
-    # Columns to display - PnL_Per_Share and percent gain/loss are next to each other now
-    display_columns = [
-        'Symbol', 'Buy_Quantity', 'Avg_Buy_Price', 'Avg_Sell_Price', 
-        'PnL_Per_Share', percent_gain_loss_field,  # Field next to PnL_Per_Share
-        'Total_Cost', 'Total_Revenue', profit_loss_field,  # Use appropriate field name
-        'Trade_Outcome', 'Price_Range', 
-        'Market_Hour_Category', 'Month', 'Day_of_Week', 'DateTime'
-    ]
+    # Columns to display - adapt based on analysis type
+    if is_position_based:
+        display_columns = [
+            'Trade_ID', 'Symbol', 'Buy_Quantity', 'Avg_Buy_Price', 'Avg_Sell_Price', 
+            'PnL_Per_Share', percent_gain_loss_field,
+            'Total_Cost', 'Total_Revenue', profit_loss_field,
+            'Trade_Outcome', 'Num_Buys', 'Num_Sells', 'Trade_Duration_Minutes',
+            'Price_Range', 'Market_Hour_Category', 'Month', 'Day_of_Week', 
+            'Buy_Details', 'Sell_Details'
+        ]
+    else:
+        display_columns = [
+            'Symbol', 'Buy_Quantity', 'Avg_Buy_Price', 'Avg_Sell_Price', 
+            'PnL_Per_Share', percent_gain_loss_field,
+            'Total_Cost', 'Total_Revenue', profit_loss_field,
+            'Trade_Outcome', 'Price_Range', 
+            'Market_Hour_Category', 'Month', 'Day_of_Week', 'DateTime'
+        ]
+    
+    # Filter to only include columns that actually exist in the dataframe
+    display_columns = [col for col in display_columns if col in trade_analysis_df.columns]
     
     # Format the dataframe for display
     display_df = trade_analysis_df[display_columns].copy()
     
     # Store original numeric values for styling
     numeric_pnl_per_share = trade_analysis_df['PnL_Per_Share'].copy()
-    numeric_profit_loss = trade_analysis_df[profit_loss_field].copy()  # Use appropriate field
-    numeric_percent_gain_loss = trade_analysis_df[percent_gain_loss_field].copy()  # Use appropriate field
+    numeric_profit_loss = trade_analysis_df[profit_loss_field].copy()
+    numeric_percent_gain_loss = trade_analysis_df[percent_gain_loss_field].copy()
     
     # Format numeric columns
     display_df['Avg_Buy_Price'] = display_df['Avg_Buy_Price'].apply(lambda x: f"${x:.2f}")
@@ -301,6 +314,13 @@ def create_detailed_trade_table(trade_analysis_df):
     display_df[percent_gain_loss_field] = display_df[percent_gain_loss_field].apply(
         lambda x: f"+{x:.2f}%" if x > 0 else f"{x:.2f}%"
     )
+    
+    # Format additional position-based columns if they exist
+    if is_position_based and 'Trade_Duration_Minutes' in display_df.columns:
+        # Format duration as hours:minutes
+        display_df['Trade_Duration_Minutes'] = display_df['Trade_Duration_Minutes'].apply(
+            lambda x: f"{int(x // 60)}h {int(x % 60)}m" if x >= 60 else f"{int(x)}m"
+        )
     
     # Create a function to apply styling based on value
     def style_dataframe(df):
