@@ -4,7 +4,11 @@ import io
 
 
 # Import custom modules
-from src.data_processor import load_trading_data_from_bytes, prepare_trade_analysis
+from src.data_processor import (
+    load_trading_data_from_bytes, 
+    prepare_trade_analysis_enhanced,
+    prepare_position_based_trade_analysis
+)
 from src.performance_analysis import (
     calculate_overall_performance, 
     performance_by_dimension, 
@@ -49,10 +53,22 @@ def main():
             raw_df = load_trading_data_from_bytes(uploaded_file.getvalue(), file_name)
             
             # Add sidebar filters
-            st.sidebar.header("Filter Options")
+            st.sidebar.header("Analysis Options")
             
-            # Prepare trade analysis first to ensure Percent_Gain_Loss is calculated
-            full_trade_analysis_df = prepare_trade_analysis(raw_df)
+            # Add option to choose trade analysis method
+            analysis_method = st.sidebar.radio(
+                "Trade Analysis Method",
+                ["FIFO Matching (Individual Trades)", "Position-Based Analysis (Entire Positions)"],
+                help="FIFO Matching: Each buy-sell pair is a separate trade. Position-Based: All buys and sells within a position are considered one trade."
+            )
+            
+            # Prepare trade analysis using selected method
+            if analysis_method == "FIFO Matching (Individual Trades)":
+                full_trade_analysis_df = prepare_trade_analysis_enhanced(raw_df)
+            else:  # Position-Based Analysis
+                full_trade_analysis_df = prepare_position_based_trade_analysis(raw_df)
+            
+            st.sidebar.header("Filter Options")
             
             # Date Range Filter
             min_date = full_trade_analysis_df['DateTime'].min().date()
@@ -114,6 +130,15 @@ def main():
             
             # Tab 3: Detailed Trade Table
             with tab3:
+                # Add explanation about analysis method if using position-based analysis
+                if analysis_method == "Position-Based Analysis (Entire Positions)":
+                    st.info("""
+                    **Position-Based Analysis:** Each row represents a complete trading position from entry to exit.
+                    - Multiple buys and sells within the same position are combined into one trade
+                    - Buy/Sell Quantity shows the total shares bought and sold
+                    - Buy/Sell Details show the individual transactions within the position
+                    """)
+                
                 create_detailed_trade_table(filtered_trade_analysis_df)
         
         except Exception as e:
